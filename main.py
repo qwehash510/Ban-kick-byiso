@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ChatMemberAdministrator, ChatMemberOwner
 
-TOKEN = "8632170346:AAHHqXQKeGD4ealh13oJvIeFwYqufrYt9Q4"
+TOKEN = "8632170346:AAEUbWM70UqjnYyx_I92tDKHD5I-jnXgZtE"
 
 logging.basicConfig(level=logging.INFO)
 
