@@ -1,13 +1,14 @@
+import os
 import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
 
 PORT = int(os.environ.get("PORT", 8000))  # default 8000
-
-TOKEN = "8632170346:AAEyem9RE5gM7HQXwoSAnaL0m8rpE5vbpWA"
+TOKEN = os.getenv("BOT_TOKEN")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
+
 
 async def fast_ban(chat_id, user_id):
     try:
