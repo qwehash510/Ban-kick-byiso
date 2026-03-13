@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ChatMemberAdministrator, ChatMemberOwner
 
-TOKEN = "BOT_TOKEN_BURAYA"
+TOKEN = "8632170346:AAEyem9RE5gM7HQXwoSAnaL0m8rpE5vbpWA"
 
 logging.basicConfig(level=logging.INFO)
 
