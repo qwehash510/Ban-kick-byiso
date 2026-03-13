@@ -1,71 +1,49 @@
 import os
 import asyncio
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiohttp import web
 
 TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
 
-# Basit HTTP server (Railway Web Service için)
-async def keep_alive():
-    async def handler(request):
-        return web.Response(text="Bot çalışıyor!")
-    app = web.Application()
-    app.add_routes([web.get("/", handler)])
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8000)))
-    await site.start()
-
-# Hızlı ban fonksiyonu
-async def fast_ban(chat_id: int, user_id: int):
+async def fast_ban(chat_id, user_id):
     try:
-        await bot.ban_chat_member(chat_id, user_id)
+        await bot.kick_chat_member(chat_id, user_id)
     except:
         pass
 
-# /ban komutu
-@dp.message(Command("ban"))
+@dp.message_handler(commands=["ban"])
 async def ban_command(message: types.Message):
     try:
         limit = int(message.text.split()[1])
     except:
-        await message.answer("Kullanım: /ban 100")
+        await message.reply("Kullanım: /ban 100")
         return
 
     banned = 0
-    tasks = []
+    admins = await bot.get_chat_administrators(message.chat.id)
+    admin_ids = [a.user.id for a in admins]
 
-    async for member in bot.iter_chat_members(message.chat.id):
-        if banned >= limit:
+    offset = 0
+    while banned < limit:
+        members = await bot.get_chat_members(message.chat.id, offset=offset)
+        if not members:
             break
-        if member.user.is_bot:
-            continue
-        tasks.append(fast_ban(message.chat.id, member.user.id))
-        banned += 1
 
-        # 50 kişi bir dalga
-        if len(tasks) >= 50:
-            await asyncio.gather(*tasks)
-            tasks = []
+        for m in members:
+            if m.user.id in admin_ids or m.user.is_bot:
+                continue
+            await fast_ban(message.chat.id, m.user.id)
+            banned += 1
+            if banned >= limit:
+                break
+        offset += len(members)
 
-    if tasks:
-        await asyncio.gather(*tasks)
+    await message.reply("iso7K farkıyla")
 
-    await message.answer("iso7K farkıyla")
-
-# Başlangıç mesajı
-async def on_startup():
-    print("her mısırın bir firavunu var")
-    print("Railway’de hatasız çalıştı")
-
-# Main
 async def main():
-    await keep_alive()
-    await on_startup()
-    await dp.start_polling(bot)
+    print("her mısırın bir firavunu var")
+    await dp.start_polling()
 
 if __name__ == "__main__":
     asyncio.run(main())
