@@ -3,6 +3,7 @@ import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
 
+# Burada OS kullanımı güvenli
 PORT = int(os.environ.get("PORT", 8000))  # default 8000
 TOKEN = os.getenv("BOT_TOKEN")
 
