@@ -1,16 +1,21 @@
-# iso.py ── 2026 EN VAHŞİ BAN BOTU (saniyede 100 hedef, gerçekte 7-9 ban/s tepe)
+# iso.py — Render + Python 3.11.11 + ultra hızlı ban botu
+
 import asyncio
 import random
 import logging
+import os
 from datetime import datetime, timedelta
 from pyrogram import Client, filters, enums
 from pyrogram.types import Message
 from pyrogram.errors import FloodWait, RPCError, UserAdminInvalid, BadRequest
 
-BOT_TOKEN = "BOT_TOKEN"
+# Render Environment'dan çek (hardcoded token yok!)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN Render Environment'a eklenmemiş! Dashboard → Environment Variables'a koy.")
 
-DELAY_MIN = 0.055
-DELAY_MAX = 0.11
+DELAY_MIN  = 0.055
+DELAY_MAX  = 0.11
 BATCH_SIZE = 120
 BATCH_MOLA = 0.9
 
@@ -18,12 +23,18 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(message)s")
 LOGGER = logging.getLogger("iso")
 
 iso = Client("iso_anarchy", bot_token=BOT_TOKEN)
+
 attack_running = False
 banned_total = 0
 
 def is_real(u):
-    return (not u.is_bot and not u.is_deleted and not u.is_restricted and
-            u.username and len(u.username) >= 5 and u.photo)
+    return (
+        not u.is_bot and
+        not u.is_deleted and
+        not u.is_restricted and
+        u.username and len(u.username) >= 5 and
+        u.photo
+    )
 
 async def nuke(chat_id: int, target: int):
     global attack_running, banned_total
@@ -48,7 +59,7 @@ async def nuke(chat_id: int, target: int):
                 await asyncio.sleep(BATCH_MOLA)
 
         except FloodWait as e:
-            await asyncio.sleep(e.value + 1.5)
+            await asyncio.sleep(e.value + 1.0)
         except Exception:
             continue
 
@@ -62,8 +73,8 @@ async def ban_command(_, msg: Message):
         return
 
     try:
-        _, adet = msg.text.split(maxsplit=1)
-        adet = int(adet)
+        _, adet_str = msg.text.split(maxsplit=1)
+        adet = int(adet_str)
         if adet < 100:
             return
     except:
@@ -72,6 +83,10 @@ async def ban_command(_, msg: Message):
     await msg.reply("iso", quote=False)
     asyncio.create_task(nuke(msg.chat.id, adet))
 
-if __name__ == "__main__":
+async def main():
     print("iso ANARCHY MOD AKTİF - /ban sayı yaz yeter")
-    iso.run()
+    await iso.start()
+    await asyncio.Event().wait()  # sonsuz bekle
+
+if __name__ == "__main__":
+    asyncio.run(main())
