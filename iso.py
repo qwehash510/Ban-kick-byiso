@@ -7,7 +7,7 @@ from pyrogram import Client, filters, enums
 from pyrogram.types import Message
 from pyrogram.errors import FloodWait, RPCError, UserAdminInvalid, BadRequest
 
-BOT_TOKEN = "1234567890:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"  # Buraya kendi tokenını koy
+BOT_TOKEN = "8632170346:AAEyem9RE5gM7HQXwoSAnaL0m8rpE5vbpWA"  # Buraya kendi tokenını koy
 
 DELAY_MIN = 0.055
 DELAY_MAX = 0.11
