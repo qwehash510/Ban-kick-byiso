@@ -1,2 +1,2 @@
 #!/bin/bash
-python iso.py
+python main.py
