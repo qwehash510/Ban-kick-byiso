@@ -1,85 +1,144 @@
+import os
 import asyncio
 from pyrogram import Client, filters
-from pytgcalls import GroupCallFactory
+from pyrogram.types import Message
+from pytgcalls import PyTgCalls
 from pytgcalls.types.input_stream import AudioPiped
 from yt_dlp import YoutubeDL
 from config import API_ID, API_HASH, BOT_TOKEN
-import os
 
-# Klasör
-DOWNLOAD_DIR = "downloads"
-if not os.path.exists(DOWNLOAD_DIR):
-    os.makedirs(DOWNLOAD_DIR)
+DOWNLOADS = "downloads"
+if not os.path.exists(DOWNLOADS):
+    os.makedirs(DOWNLOADS)
 
-# Telegram Client
 bot = Client(
-    "iso_music_bot",
+    "iso_music",
     api_id=API_ID,
     api_hash=API_HASH,
     bot_token=BOT_TOKEN
 )
 
-# Yeni PyTgCalls yerine GroupCallFactory
-group_call_factory = GroupCallFactory(bot)
+call = PyTgCalls(bot)
 queues = {}
 
-# YoutubeDL ayarları
 ytdl_opts = {
     "format": "bestaudio",
-    "outtmpl": f"{DOWNLOAD_DIR}/%(title)s.%(ext)s",
-    "quiet": True
+    "outtmpl": f"{DOWNLOADS}/%(title)s.%(ext)s",
+    "quiet": True,
+    "noplaylist": True
 }
 
-def download_song(query):
+
+def download_audio(query):
     with YoutubeDL(ytdl_opts) as ydl:
         info = ydl.extract_info(f"ytsearch:{query}", download=True)["entries"][0]
         file = ydl.prepare_filename(info)
-    return file, info["title"]
+        title = info.get("title", "Bilinmeyen")
+    return file, title
 
-# Komutlar
+
 @bot.on_message(filters.command("start"))
-async def start(client, message):
-    await message.reply(
-        "✨ **ISO. Music Bot**\n\n"
-        "▶ /play şarkı\n⏸ /pause\n▶ /resume\n⏭ /skip\n⏹ /stop\n📜 /queue\n👋 /leave"
-    )
+async def start_cmd(client, message: Message):
+    text = """✨ **𝐈𝐒𝐎 𝐌𝐔𝐒𝐈𝐂 𝐁𝐎𝐓’a hoş geldin!** 🎧
+
+🌟 **Sesli sohbette müzik çalar**
+📌 /play şarkı adı  
+📌 /pause  
+📌 /resume  
+📌 /skip  
+📌 /stop  
+📌 /queue  
+📌 /leave
+"""
+    await message.reply(text)
+
 
 @bot.on_message(filters.command("play"))
-async def play(client, message):
+async def play_music(client, message: Message):
     if len(message.command) < 2:
-        return await message.reply("⚠️ Şarkı adı yaz!")
-    query = message.text.split(None,1)[1]
-    msg = await message.reply("🔎 Şarkı aranıyor...")
+        return await message.reply("⚠️ **Şarkı adı gir!**")
 
-    file, title = download_song(query)
+    query = message.text.split(None, 1)[1]
+    msg = await message.reply("🔎 **Aranıyor...**")
+
+    file, title = download_audio(query)
     chat_id = message.chat.id
+
     if chat_id not in queues:
         queues[chat_id] = []
 
-    queues[chat_id].append((file,title))
+    queues[chat_id].append((file, title))
 
     if len(queues[chat_id]) == 1:
-        # Voice chat’e katıl ve çal
-        call = group_call_factory.get_file_group_call()
-        await call.start(chat_id)
-        await call.stream(AudioPiped(file))
-        await msg.edit(f"🎶 **Çalıyor:** {title}")
+        # Join VC & play
+        await call.join_group_call(
+            chat_id,
+            AudioPiped(file)
+        )
+        await msg.edit(f"🎶 **Çalıyor:** `{title}`")
     else:
-        await msg.edit(f"📥 **Queue eklendi:** {title}")
+        await msg.edit(f"📥 **Queue'ya eklendi:** `{title}`")
+
+
+@bot.on_message(filters.command("skip"))
+async def skip_music(client, message: Message):
+    chat_id = message.chat.id
+
+    if chat_id not in queues or len(queues[chat_id]) < 2:
+        return await message.reply("⚠️ **Atlanacak şarkı yok!**")
+
+    queues[chat_id].pop(0)
+    next_file, next_title = queues[chat_id][0]
+
+    await call.change_stream(
+        chat_id,
+        AudioPiped(next_file)
+    )
+
+    await message.reply(f"⏭ **Atlandı!** Şimdi: `{next_title}`")
+
+
+@bot.on_message(filters.command("pause"))
+async def pause_music(client, message: Message):
+    await call.pause_stream(message.chat.id)
+    await message.reply("⏸️ **Müzik duraklatıldı**")
+
+
+@bot.on_message(filters.command("resume"))
+async def resume_music(client, message: Message):
+    await call.resume_stream(message.chat.id)
+    await message.reply("▶️ **Müzik devam ediyor**")
+
 
 @bot.on_message(filters.command("stop"))
-async def stop(client, message):
+async def stop_music(client, message: Message):
     chat_id = message.chat.id
-    if chat_id in queues:
-        queues[chat_id] = []
-    call = group_call_factory.get_file_group_call()
-    await call.stop()
-    await message.reply("⏹ **Müzik durduruldu**")
+    queues[chat_id] = []
+    await call.leave_group_call(chat_id)
+    await message.reply("⏹️ **Müzik durduruldu**")
 
-# Bot çalıştırma
+
+@bot.on_message(filters.command("queue"))
+async def show_queue(client, message: Message):
+    chat_id = message.chat.id
+    if chat_id not in queues or not queues[chat_id]:
+        return await message.reply("📭 **Queue boş!**")
+
+    text = "📜 **Queue Listesi:**\n\n"
+    for i, (_, title) in enumerate(queues[chat_id]):
+        text += f"{i+1}. `{title}`\n"
+    await message.reply(text)
+
+
+@bot.on_message(filters.command("leave"))
+async def leave_vc(client, message: Message):
+    await call.leave_group_call(message.chat.id)
+    await message.reply("👋 **Sohbetten ayrıldım!**")
+
+
 async def main():
     await bot.start()
-    print("ISO Music Bot aktif")
+    print("✅ ISO Music Bot aktif!")
     await asyncio.Event().wait()
 
 asyncio.run(main())
