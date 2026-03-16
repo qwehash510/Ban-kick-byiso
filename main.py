@@ -2,7 +2,7 @@ import os
 import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from pytgcalls import PyTgCalls
+from pytgcalls import GroupCallFactory
 from pytgcalls.types.input_stream import AudioPiped
 from yt_dlp import YoutubeDL
 from config import API_ID, API_HASH, BOT_TOKEN
@@ -19,7 +19,7 @@ bot = Client(
     bot_token=BOT_TOKEN
 )
 
-call = PyTgCalls(bot)
+group_call = GroupCallFactory(bot).get_file_group_call()
 
 queues = {}
 
