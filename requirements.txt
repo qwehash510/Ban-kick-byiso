@@ -1,1 +1,5 @@
-aiogram==3.4.1
+pyrogram
+tgcrypto
+pytgcalls
+yt-dlp
+ffmpeg-python
