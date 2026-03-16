@@ -1,88 +1,176 @@
+import os
 import asyncio
-import logging
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiogram.types import ChatMemberAdministrator, ChatMemberOwner
+from pyrogram import Client, filters
+from pyrogram.types import Message
+from pytgcalls import PyTgCalls
+from pytgcalls.types.input_stream import AudioPiped
+from yt_dlp import YoutubeDL
+from config import API_ID, API_HASH, BOT_TOKEN
 
-TOKEN = "8632170346:AAEUbWM70UqjnYyx_I92tDKHD5I-jnXgZtE"
+DOWNLOAD_DIR = "downloads"
 
-logging.basicConfig(level=logging.INFO)
+if not os.path.exists(DOWNLOAD_DIR):
+    os.makedirs(DOWNLOAD_DIR)
 
-bot = Bot(token=TOKEN)
-dp = Dispatcher()
+bot = Client(
+    "iso_music_bot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN
+)
 
-async def is_admin(chat_id, user_id):
-    member = await bot.get_chat_member(chat_id, user_id)
-    return isinstance(member, (ChatMemberAdministrator, ChatMemberOwner))
+call = PyTgCalls(bot)
 
+queues = {}
 
-@dp.message(Command("start"))
-async def start(message: types.Message):
-    await message.answer("iso7K aktif. ⚡")
+ytdl_opts = {
+    "format": "bestaudio",
+    "outtmpl": f"{DOWNLOAD_DIR}/%(title)s.%(ext)s",
+    "quiet": True,
+}
 
+def download_song(query):
 
-@dp.message(Command("banall"))
-async def ban_all(message: types.Message):
+    with YoutubeDL(ytdl_opts) as ydl:
 
-    if not await is_admin(message.chat.id, message.from_user.id):
-        return await message.answer("Bu komutu sadece admin kullanabilir.")
+        info = ydl.extract_info(f"ytsearch:{query}", download=True)["entries"][0]
+        file = ydl.prepare_filename(info)
 
-    await message.answer("Her mısırın bir firavunu var by iso7K ⚡")
-
-    try:
-        members = []
-        async for m in bot.get_chat_administrators(message.chat.id):
-            members.append(m.user.id)
-
-        async for user in bot.get_chat_members(message.chat.id):
-            if user.user.id in members:
-                continue
-
-            try:
-                await bot.ban_chat_member(message.chat.id, user.user.id)
-            except:
-                pass
-
-        await message.answer("C7K ve Tafa sunar.")
-
-    except Exception as e:
-        await message.answer("Hata oluştu.")
-        print(e)
+    return file, info["title"]
 
 
-@dp.message(Command("kickall"))
-async def kick_all(message: types.Message):
+@bot.on_message(filters.command("start"))
+async def start(client, message: Message):
 
-    if not await is_admin(message.chat.id, message.from_user.id):
-        return await message.answer("Bu komutu sadece admin kullanabilir.")
+    text = """
+✨ **ISO. MUSIC BOT**
 
-    await message.answer("Her mısırın bir firavunu var by iso7K ⚡")
+🎧 Sesli sohbette müzik çalar
 
-    try:
-        admins = []
-        async for m in bot.get_chat_administrators(message.chat.id):
-            admins.append(m.user.id)
+**Komutlar**
 
-        async for user in bot.get_chat_members(message.chat.id):
-            if user.user.id in admins:
-                continue
+▶ /play şarkı  
+⏸ /pause  
+▶ /resume  
+⏭ /skip  
+⏹ /stop  
+📜 /queue  
+👋 /leave
+"""
 
-            try:
-                await bot.ban_chat_member(message.chat.id, user.user.id)
-                await bot.unban_chat_member(message.chat.id, user.user.id)
-            except:
-                pass
+    await message.reply_text(text)
 
-        await message.answer("C7K ve Tafa sunar.")
 
-    except Exception as e:
-        await message.answer("Hata oluştu.")
-        print(e)
+@bot.on_message(filters.command("play"))
+async def play(client, message: Message):
+
+    if len(message.command) < 2:
+        return await message.reply("⚠️ **Şarkı adı yaz!**")
+
+    query = message.text.split(None,1)[1]
+
+    msg = await message.reply("🔎 **Şarkı aranıyor...**")
+
+    file, title = download_song(query)
+
+    chat_id = message.chat.id
+
+    if chat_id not in queues:
+        queues[chat_id] = []
+
+    queues[chat_id].append((file,title))
+
+    if len(queues[chat_id]) == 1:
+
+        await call.join_group_call(
+            chat_id,
+            AudioPiped(file)
+        )
+
+        await msg.edit(f"🎶 **Çalıyor:** {title}")
+
+    else:
+
+        await msg.edit(f"📥 **Queue eklendi:** {title}")
+
+
+@bot.on_message(filters.command("skip"))
+async def skip(client, message: Message):
+
+    chat_id = message.chat.id
+
+    if chat_id not in queues or len(queues[chat_id]) < 2:
+        return await message.reply("⚠️ **Atlanacak şarkı yok**")
+
+    queues[chat_id].pop(0)
+
+    file,title = queues[chat_id][0]
+
+    await call.change_stream(
+        chat_id,
+        AudioPiped(file)
+    )
+
+    await message.reply(f"⏭ **Atlandı**\n🎶 {title}")
+
+
+@bot.on_message(filters.command("pause"))
+async def pause(client, message: Message):
+
+    await call.pause_stream(message.chat.id)
+
+    await message.reply("⏸ **Müzik duraklatıldı**")
+
+
+@bot.on_message(filters.command("resume"))
+async def resume(client, message: Message):
+
+    await call.resume_stream(message.chat.id)
+
+    await message.reply("▶ **Müzik devam ediyor**")
+
+
+@bot.on_message(filters.command("stop"))
+async def stop(client, message: Message):
+
+    queues[message.chat.id] = []
+
+    await call.leave_group_call(message.chat.id)
+
+    await message.reply("⏹ **Müzik durduruldu**")
+
+
+@bot.on_message(filters.command("queue"))
+async def queue(client, message: Message):
+
+    chat_id = message.chat.id
+
+    if chat_id not in queues or not queues[chat_id]:
+        return await message.reply("📭 **Queue boş**")
+
+    text = "📜 **Müzik Listesi**\n\n"
+
+    for i,(file,title) in enumerate(queues[chat_id]):
+        text += f"{i+1}. {title}\n"
+
+    await message.reply(text)
+
+
+@bot.on_message(filters.command("leave"))
+async def leave(client, message: Message):
+
+    await call.leave_group_call(message.chat.id)
+
+    await message.reply("👋 **Sohbetten çıktım**")
 
 
 async def main():
-    await dp.start_polling(bot)
 
+    await bot.start()
+    await call.start()
 
-if __name__ == "__main__":
-    asyncio.run(main())
+    print("ISO MUSIC BOT AKTİF")
+
+    await asyncio.Event().wait()
+
+asyncio.run(main())
